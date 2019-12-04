@@ -88,40 +88,40 @@ class BaseEvaluator():
 
         from PIL import Image
 
-        for batch_idx, (data, target) in enumerate(self.val_loader[0]):
-            if self.cuda:
-                data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
-            with torch.no_grad():
-                #output = self.model(data)
-                data_cpy = data.clone().detach()
-                std_cpy = data.clone().detach() # std_cpy is used for finding the standard accuracy and has transforms applied as normal
-                # data_cpy = torch.tensor([])
-                # std_cpy = torch.tensor([])
-                # for idx in range(len(data_cpy)):
-                #     #print("Tensor is cuda?", data_cpy.is_cuda)
-
-                #     data_cpy = torch.cat((data_cpy, torch.tensor(transforms.functional.normalize(transforms.functional.to_tensor(data[idx, :]), IMAGENET_MEAN, IMAGENET_STD)      )))
-                #     #std_cpy[idx] = transforms.functional.normalize(data[idx].clone().cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda() # DELETE
-                #     transformedTensor = applyTransforms(np.copy(data[idx, :]))
-                #     std_cpy = torch.cat((std_cpy, torch.tensor(transforms.functional.normalize(transformedTensor.clone().cpu(), IMAGENET_MEAN, IMAGENET_STD))))
-                #     #std_cpy[idx, :] = transforms.functional.normalize(transformedTensor.cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda()
-                #     transformedImage = norm_to_pil_image(np.array(std_cpy[idx, :].cpu()))
-                #     transformedImage.save('sample_data/standard' + str(idx) + '.png')
-                #     untransformedImage = norm_to_pil_image(np.array(data_cpy[idx, :].cpu()))
-                #     untransformedImage.save('sample_data/data' + str(idx) + '.png')
-                #     # print(np.array(data_cpy[idx].cpu()) - np.array(std_cpy[idx].cpu()))
-                output = self.model(std_cpy)
-                std_logits.update(output.cpu())
-                loss = F.cross_entropy(output, target, reduction='none').cpu()
-                std_loss.update(loss)
-                corr = correct(output, target)
-                corr = corr.view(corr.size()[0]).cpu()
-                std_corr.update(corr)
-
-            run_output = {'std_loss':std_loss.avg,
-                          'std_acc':std_corr.avg}
-            print('Standard Batch', batch_idx)
-            print(run_output)
+        # for batch_idx, (data, target) in enumerate(self.val_loader[0]):
+        #     if self.cuda:
+        #         data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
+        #     with torch.no_grad():
+        #         #output = self.model(data)
+        #         data_cpy = data.clone().detach()
+        #         std_cpy = data.clone().detach() # std_cpy is used for finding the standard accuracy and has transforms applied as normal
+        #         # data_cpy = torch.tensor([])
+        #         # std_cpy = torch.tensor([])
+        #         # for idx in range(len(data_cpy)):
+        #         #     #print("Tensor is cuda?", data_cpy.is_cuda)
+        #
+        #         #     data_cpy = torch.cat((data_cpy, torch.tensor(transforms.functional.normalize(transforms.functional.to_tensor(data[idx, :]), IMAGENET_MEAN, IMAGENET_STD)      )))
+        #         #     #std_cpy[idx] = transforms.functional.normalize(data[idx].clone().cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda() # DELETE
+        #         #     transformedTensor = applyTransforms(np.copy(data[idx, :]))
+        #         #     std_cpy = torch.cat((std_cpy, torch.tensor(transforms.functional.normalize(transformedTensor.clone().cpu(), IMAGENET_MEAN, IMAGENET_STD))))
+        #         #     #std_cpy[idx, :] = transforms.functional.normalize(transformedTensor.cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda()
+        #         #     transformedImage = norm_to_pil_image(np.array(std_cpy[idx, :].cpu()))
+        #         #     transformedImage.save('sample_data/standard' + str(idx) + '.png')
+        #         #     untransformedImage = norm_to_pil_image(np.array(data_cpy[idx, :].cpu()))
+        #         #     untransformedImage.save('sample_data/data' + str(idx) + '.png')
+        #         #     # print(np.array(data_cpy[idx].cpu()) - np.array(std_cpy[idx].cpu()))
+        #         output = self.model(std_cpy)
+        #         std_logits.update(output.cpu())
+        #         loss = F.cross_entropy(output, target, reduction='none').cpu()
+        #         std_loss.update(loss)
+        #         corr = correct(output, target)
+        #         corr = corr.view(corr.size()[0]).cpu()
+        #         std_corr.update(corr)
+        #
+        #     run_output = {'std_loss':std_loss.avg,
+        #                   'std_acc':std_corr.avg}
+        #     print('Standard Batch', batch_idx)
+        #     print(run_output)
 
         for batch_idx, (data, target) in enumerate(self.val_loader[1]):
 
@@ -201,19 +201,19 @@ class BaseEvaluator():
                 corr = corr.view(corr.size()[0]).cpu()
                 adv_corr.update(corr)
 
-            # run_output = {'adv_loss':adv_loss.avg,
-            #               'adv_acc':adv_corr.avg}
-            # print('Adv Batch', batch_idx)
-            # print(run_output)
-
-            run_output = {'std_loss':std_loss.avg,
-                          'std_acc':std_corr.avg,
-                          'adv_loss':adv_loss.avg,
+            run_output = {'adv_loss':adv_loss.avg,
                           'adv_acc':adv_corr.avg}
-            print('Batch', batch_idx)
+            print('Adv Batch', batch_idx)
             print(run_output)
-            if batch_idx % 20 == 0:
-                self.logger.log(run_output, batch_idx)
+
+            # run_output = {'std_loss':std_loss.avg,
+            #               'std_acc':std_corr.avg,
+            #               'adv_loss':adv_loss.avg,
+            #               'adv_acc':adv_corr.avg}
+            # print('Batch', batch_idx)
+            # print(run_output)
+            # if batch_idx % 20 == 0:
+            #     self.logger.log(run_output, batch_idx)
 
         summary_dict = {'std_acc':std_corr.avg.item(),
                         'adv_acc':adv_corr.avg.item()}
