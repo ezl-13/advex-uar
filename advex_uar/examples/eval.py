@@ -125,11 +125,8 @@ class BaseEvaluator():
 
         for batch_idx, (data, target) in enumerate(self.val_loader[1]):
 
-
             # data is normalized at this point
 
-            # print("Target size", target.size())
-            # print("Target datatype", target.dtype)
             if self.cuda:
                 data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
 
@@ -209,21 +206,9 @@ class BaseEvaluator():
             #               'adv_acc':adv_corr.avg}
             # print('Batch', batch_idx)
             # print(run_output)
-            # if batch_idx % 20 == 0:
-            #     self.logger.log(run_output, batch_idx)
 
         summary_dict = {'std_acc':std_corr.avg.item(),
                         'adv_acc':adv_corr.avg.item()}
-        # self.logger.log_summary(summary_dict)
-        # for orig_img, adv_img, target in adv_images.vals:
-        #     self.logger.log_image(orig_img, 'orig_{}.png'.format(target))
-        #     self.logger.log_image(adv_img, 'adv_{}.png'.format(target))
-        # for idx, imgs in enumerate(first_batch_images.vals):
-        #     orig_img, adv_img = imgs
-        #     self.logger.log_image(orig_img, 'init_orig_{}.png'.format(idx))
-        #     self.logger.log_image(adv_img, 'init_adv_{}.png'.format(idx))
-        #
-        # self.logger.end()
         print(std_loss.avg, std_corr.avg, adv_loss.avg, adv_corr.avg)
 
 class CIFAR10Evaluator(BaseEvaluator):
@@ -231,12 +216,6 @@ class CIFAR10Evaluator(BaseEvaluator):
         normalize = transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
         self.val_dataset = datasets.CIFAR10(
                 root='./', download=True, train=False,
-                # transform=transforms.Compose([
-                #         # transforms.ToTensor(),
-                #         transforms.RandomHorizontalFlip(p=0.5),
-                #         #transforms.ToTensor()]))
-                #         np.array]))
-                #         #normalize]))
                 transform=transforms.Compose([
                     transforms.RandomHorizontalFlip(p=0.5),
                     transforms.RandomApply([applyTransforms], p=1),
@@ -255,19 +234,6 @@ class CIFAR10Evaluator(BaseEvaluator):
                 self.val_adv_dataset, batch_size=self.batch_size,
                 shuffle=False, num_workers=8, pin_memory=True)
         ]
-
-# def applyAdvTransforms(img):
-#     rand_target = torch.randint(
-#                 0, 9, target.size(),
-#                 dtype=target.dtype, device='cuda')
-#             rand_target = torch.remainder(target + rand_target + 1, 10)
-#             data_adv = self.attack(self.model, data_cpy, rand_target,
-#                                    avoid_target=False, scale_eps=False)
-
-#             for idx in range(len(data_adv_cpy)):
-#                 unnormalized = reverse_normalization(data_adv[idx])
-#                 transformed = applyTransforms(unnormalized.cpu().detach())
-#                 data_adv_cpy[idx] = transforms.functional.normalize(transformed.cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda()
 
 class CIFAR10CEvaluator(BaseEvaluator):
     def __init__(self, corruption_type=None, corruption_name=None, corruption_level=None, **kwargs):
