@@ -1,6 +1,6 @@
 import click
 
-import horovod.torch as hvd
+# import horovod.torch as hvd
 import torch
 import numpy as np
 
@@ -11,13 +11,13 @@ from advex_uar.common import FlagHolder
 def train(**flag_kwargs):
     FLAGS = FlagHolder()
     FLAGS.initialize(**flag_kwargs)
-    hvd.init()
+    # hvd.init()
     if FLAGS.step_size is None:
         FLAGS.step_size = get_step_size(FLAGS.epsilon, FLAGS.n_iters, FLAGS.use_max_step)
         FLAGS._dict['step_size'] = FLAGS.step_size
 
-    if hvd.rank() == 0:
-        FLAGS.summary()
+    # if hvd.rank() == 0:
+        # FLAGS.summary()
 
     if FLAGS.dataset == 'imagenet':
         Trainer = ImagenetTrainer
@@ -26,10 +26,11 @@ def train(**flag_kwargs):
     else:
         raise NotImplementedError
 
-    if hvd.rank() == 0:
-        logger = init_logger(FLAGS.use_wandb, 'train', FLAGS._dict)
-    else:
-        logger = None
+    # if hvd.rank() == 0:
+    #     logger = init_logger(FLAGS.use_wandb, 'train', FLAGS._dict)
+    # else:
+    #     logger = None
+    logger = None
     if FLAGS.checkpoint_dir is None:
         FLAGS.checkpoint_dir = logger.log_dir
     print('checkpoint at {}'.format(FLAGS.checkpoint_dir))
@@ -53,8 +54,8 @@ def train(**flag_kwargs):
         logger=logger, tag=FLAGS.tag)
     trainer.train()
 
-    if hvd.rank() == 0:
-        print("Training finished.")
+    # if hvd.rank() == 0:
+    #     print("Training finished.")
 
 @click.command()
 # wandb options

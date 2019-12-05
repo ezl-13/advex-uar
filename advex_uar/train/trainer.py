@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.utils.data.distributed
 import torchvision
 from torchvision import datasets, transforms, models
-import horovod.torch as hvd
+# import horovod.torch as hvd
 
 from advex_uar.common.loader import StridedImageFolder
 
@@ -20,7 +20,7 @@ class Metric(object):
         self.n = torch.tensor(0.)
 
     def update(self, val):
-        self.sum += hvd.allreduce(val.detach().cpu(), name=self.name)
+        # self.sum += hvd.allreduce(val.detach().cpu(), name=self.name)
         self.n += 1
 
     @property
@@ -69,13 +69,13 @@ class BaseTrainer():
 
         self.cuda = True
         self.batches_per_allreduce = 1
-        self.verbose = 1 if hvd.rank() == 0 else 0
-        self.compression = hvd.Compression.fp16 if self.fp16_allreduce else hvd.Compression.none
+        self.verbose = 0
+        # self.compression = hvd.Compression.fp16 if self.fp16_allreduce else hvd.Compression.none
 
         if self.verbose:
             print(self.model)
 
-        torch.cuda.set_device(hvd.local_rank())
+        # torch.cuda.set_device(hvd.local_rank())
 
         if self.cuda:
             self.model.cuda()
@@ -145,7 +145,7 @@ class BaseTrainer():
             return loss.mean()
         else:
             return F.cross_entropy(output, target)
-        
+
     def _train_epoch(self, epoch):
         self.model.train()
 
@@ -156,7 +156,7 @@ class BaseTrainer():
 
         if self.attack:
             self.attack.set_epoch(epoch)
-            
+
         for batch_idx, (data, target) in enumerate(self.train_loader):
             if self.cuda:
                 data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
@@ -171,7 +171,7 @@ class BaseTrainer():
                 with torch.no_grad():
                     self.model.eval()
                     output = self.model(data)
-                    train_std_loss_val = self._compute_loss(output, target)            
+                    train_std_loss_val = self._compute_loss(output, target)
                     train_std_loss.update(train_std_loss_val)
                     train_std_acc.update(accuracy(output, target))
                     self.model.train()
@@ -191,7 +191,7 @@ class BaseTrainer():
                                            avoid_target=True, scale_eps=self.scale_eps)
                 output_adv = self.model(data_adv)
                 adv_loss = self._compute_loss(output_adv, target)
-                
+
                 train_adv_loss.update(adv_loss)
                 train_adv_acc.update(accuracy(output_adv, target))
                 loss += adv_loss
@@ -241,7 +241,7 @@ class BaseTrainer():
                     output_adv = self.model(data_adv)
                     val_adv_loss.update(F.cross_entropy(output_adv, target))
                     val_adv_acc.update(accuracy(output_adv, target))
-                    
+
                     output_max_adv = self.model(data_max_adv)
                     val_max_adv_loss.update(F.cross_entropy(output_max_adv, target))
                     val_max_adv_acc.update(accuracy(output_max_adv, target))
