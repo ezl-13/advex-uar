@@ -178,7 +178,6 @@ class BaseEvaluator():
             #     savedImage = norm_to_pil_image(data_adv[idx])
             #     savedImage.save("sample_data/eric" + str(idx) + '.png')
 
-
             data_adv_cpy = data_adv.clone().detach()
 
             for idx in range(len(data_adv_cpy)):
@@ -186,8 +185,6 @@ class BaseEvaluator():
                 # savedImage.save("sample_data/before_transforms" + str(idx) + '.png')
                 unnormalized = reverse_normalization(data_adv[idx])
                 changed = np.swapaxes(np.array(unnormalized.cpu().detach()) * 255.0, 0, 2)
-                # print(changed.shape)
-                # print(changed)
 
                 transformed = applyTransforms(np.swapaxes(np.array(unnormalized.cpu().clone().detach()) * 255.0, 0, 2))
                 data_adv_cpy[idx] = transforms.functional.normalize(transformed.clone().cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda()
