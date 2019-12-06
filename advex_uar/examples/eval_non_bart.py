@@ -88,24 +88,24 @@ class BaseEvaluator():
 
         from PIL import Image
 
-        for batch_idx, (data, target) in enumerate(self.val_loader[0]):
-            if self.cuda:
-                data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
-            with torch.no_grad():
-                #output = self.model(data)
-                std_cpy = data.clone().detach()
-                output = self.model(std_cpy)
-                std_logits.update(output.cpu())
-                loss = F.cross_entropy(output, target, reduction='none').cpu()
-                std_loss.update(loss)
-                corr = correct(output, target)
-                corr = corr.view(corr.size()[0]).cpu()
-                std_corr.update(corr)
+        # for batch_idx, (data, target) in enumerate(self.val_loader[0]):
+        #     if self.cuda:
+        #         data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
+        #     with torch.no_grad():
+        #         #output = self.model(data)
+        #         std_cpy = data.clone().detach()
+        #         output = self.model(std_cpy)
+        #         std_logits.update(output.cpu())
+        #         loss = F.cross_entropy(output, target, reduction='none').cpu()
+        #         std_loss.update(loss)
+        #         corr = correct(output, target)
+        #         corr = corr.view(corr.size()[0]).cpu()
+        #         std_corr.update(corr)
         
-            run_output = {'std_loss':std_loss.avg,
-                          'std_acc':std_corr.avg}
-            print('Standard Batch', batch_idx)
-            print(run_output)
+        #     run_output = {'std_loss':std_loss.avg,
+        #                   'std_acc':std_corr.avg}
+        #     print('Standard Batch', batch_idx)
+        #     print(run_output)
 
         for batch_idx, (data, target) in enumerate(self.val_loader[1]):
 
