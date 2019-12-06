@@ -125,11 +125,8 @@ class BaseEvaluator():
 
         for batch_idx, (data, target) in enumerate(self.val_loader[1]):
 
-
             # data is normalized at this point
 
-            # print("Target size", target.size())
-            # print("Target datatype", target.dtype)
             if self.cuda:
                 data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
 
@@ -170,30 +167,27 @@ class BaseEvaluator():
                 dtype=target.dtype, device='cuda')
             rand_target = torch.remainder(target + rand_target + 1, self.nb_classes)
 
-            from PIL import Image
-            data_adv = self.attack(self.model, data, rand_target,
+            data_cpy = data.clone().detach()
+
+            for idx in range(len(data_cpy)):
+                # savedImage = norm_to_pil_image(data_adv[idx])
+                # savedImage.save("sample_data/before_transforms" + str(idx) + '.png')
+                unnormalized = reverse_normalization(data[idx])
+                changed = np.swapaxes(np.array(unnormalized.cpu().detach()) * 255.0, 0, 2)
+
+                transformed = applyTransforms(np.swapaxes(np.array(unnormalized.cpu().clone().detach()) * 255.0, 0, 2))
+                data_cpy[idx] = transforms.functional.normalize(transformed.clone().cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda()
+
+            #from PIL import Image
+            data_adv = self.attack(self.model, data_cpy, rand_target,
                                    avoid_target=False, scale_eps=False)
 
             # for idx in range(len(data)):
             #     savedImage = norm_to_pil_image(data_adv[idx])
             #     savedImage.save("sample_data/eric" + str(idx) + '.png')
 
-
-            data_adv_cpy = data_adv.clone().detach()
-
-            for idx in range(len(data_adv_cpy)):
-                # savedImage = norm_to_pil_image(data_adv[idx])
-                # savedImage.save("sample_data/before_transforms" + str(idx) + '.png')
-                unnormalized = reverse_normalization(data_adv[idx])
-                changed = np.swapaxes(np.array(unnormalized.cpu().detach()) * 255.0, 0, 2)
-                # print(changed.shape)
-                # print(changed)
-
-                transformed = applyTransforms(np.swapaxes(np.array(unnormalized.cpu().clone().detach()) * 255.0, 0, 2))
-                data_adv_cpy[idx] = transforms.functional.normalize(transformed.clone().cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda()
-
             with torch.no_grad():
-                output_adv = self.model(data_adv_cpy)
+                output_adv = self.model(data_adv)
                 adv_logits.update(output_adv.cpu())
                 loss = F.cross_entropy(output_adv, target, reduction='none').cpu()
                 adv_loss.update(loss)
@@ -206,40 +200,15 @@ class BaseEvaluator():
             print('Adv Batch', batch_idx)
             print(run_output)
 
-            # run_output = {'std_loss':std_loss.avg,
-            #               'std_acc':std_corr.avg,
-            #               'adv_loss':adv_loss.avg,
-            #               'adv_acc':adv_corr.avg}
-            # print('Batch', batch_idx)
-            # print(run_output)
-            # if batch_idx % 20 == 0:
-            #     self.logger.log(run_output, batch_idx)
-
-        # summary_dict = {'std_acc':std_corr.avg.item(),
-        #                 'adv_acc':adv_corr.avg.item()}
-        # self.logger.log_summary(summary_dict)
-        # for orig_img, adv_img, target in adv_images.vals:
-        #     self.logger.log_image(orig_img, 'orig_{}.png'.format(target))
-        #     self.logger.log_image(adv_img, 'adv_{}.png'.format(target))
-        # for idx, imgs in enumerate(first_batch_images.vals):
-        #     orig_img, adv_img = imgs
-        #     self.logger.log_image(orig_img, 'init_orig_{}.png'.format(idx))
-        #     self.logger.log_image(adv_img, 'init_adv_{}.png'.format(idx))
-        #
-        # self.logger.end()
-        # print(std_loss.avg, std_corr.avg, adv_loss.avg, adv_corr.avg)
+        summary_dict = {'std_acc':std_corr.avg.item(),
+                        'adv_acc':adv_corr.avg.item()}
+        print(std_loss.avg, std_corr.avg, adv_loss.avg, adv_corr.avg)
 
 class CIFAR10Evaluator(BaseEvaluator):
     def _init_loaders(self):
         normalize = transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
         self.val_dataset = datasets.CIFAR10(
                 root='./', download=True, train=False,
-                # transform=transforms.Compose([
-                #         # transforms.ToTensor(),
-                #         transforms.RandomHorizontalFlip(p=0.5),
-                #         #transforms.ToTensor()]))
-                #         np.array]))
-                #         #normalize]))
                 transform=transforms.Compose([
                     transforms.RandomHorizontalFlip(p=0.5),
                     transforms.RandomApply([applyTransforms], p=1),
@@ -258,19 +227,6 @@ class CIFAR10Evaluator(BaseEvaluator):
                 self.val_adv_dataset, batch_size=self.batch_size,
                 shuffle=False, num_workers=8, pin_memory=True)
         ]
-
-# def applyAdvTransforms(img):
-#     rand_target = torch.randint(
-#                 0, 9, target.size(),
-#                 dtype=target.dtype, device='cuda')
-#             rand_target = torch.remainder(target + rand_target + 1, 10)
-#             data_adv = self.attack(self.model, data_cpy, rand_target,
-#                                    avoid_target=False, scale_eps=False)
-
-#             for idx in range(len(data_adv_cpy)):
-#                 unnormalized = reverse_normalization(data_adv[idx])
-#                 transformed = applyTransforms(unnormalized.cpu().detach())
-#                 data_adv_cpy[idx] = transforms.functional.normalize(transformed.cpu(), IMAGENET_MEAN, IMAGENET_STD).cuda()
 
 class CIFAR10CEvaluator(BaseEvaluator):
     def __init__(self, corruption_type=None, corruption_name=None, corruption_level=None, **kwargs):
@@ -565,15 +521,25 @@ from scipy import fftpack
 
 # Helper functions for some transforms
 def randUnifC(low, high, params=None):
-  p = 0.75
+  p = np.random.uniform()
   if params is not None:
     params.append(p)
   return (high-low)*p + low
 
+def randUnifI(low, high, params=None):
+  p = np.random.uniform()
+  if params is not None:
+    params.append(p)
+  return round((high-low)*p + low)
+
+def randLogUniform(low, high, base=np.exp(1)):
+  div = np.log(base)
+  return base**np.random.uniform(np.log(low)/div, np.log(high)/div)
+
 ##### TRANSFORMS BELOW #####
 def colorPrecisionReduction(img):
-  scales = [100 for x in range(3)]
-  multi_channel = True
+  scales = [np.asscalar(np.random.random_integers(8, 200)) for x in range(3)]
+  multi_channel = np.random.choice(2) == 0
   params = [multi_channel] + [s/200.0 for s in scales]
 
   if multi_channel:
@@ -585,7 +551,7 @@ def colorPrecisionReduction(img):
   return img
 
 def jpegNoise(img):
-  quality = 60
+  quality = np.asscalar(np.random.random_integers(55, 95))
   params = [quality/100.0]
   pil_image = PIL.Image.fromarray((img*255.0).astype(np.uint8))
   f = BytesIO()
@@ -594,12 +560,44 @@ def jpegNoise(img):
   return jpeg_image
 
 def swirl(img):
-  strength = (2.0-0.01)*0.5 + 0.01
-  c_x = 128
-  c_y = 128
-  radius = 128
+  strength = (2.0-0.01)*np.random.random(1)[0] + 0.01
+  c_x = np.random.random_integers(1, 256)
+  c_y = np.random.random_integers(1, 256)
+  radius = np.random.random_integers(10, 200)
   params = [strength/2.0, c_x/256.0, c_y/256.0, radius/200.0]
   img = skimage.transform.swirl(img, rotation=0, strength=strength, radius=radius, center=(c_x, c_y))
+  return img
+
+def fftPerturbation(img):
+  r, c, _ = img.shape
+  #Everyone gets the same factor to avoid too many weird artifacts
+  point_factor = (1.02-0.98)*np.random.random((r,c)) + 0.98
+  randomized_mask = [np.random.choice(2)==0 for x in range(3)]
+  keep_fraction = [(0.95-0.0)*np.random.random(1)[0] + 0.0 for x in range(3)]
+  params = randomized_mask + keep_fraction
+  for i in range(3):
+    im_fft = fftpack.fft2(img[:,:,i])
+    # Set r and c to be the number of rows and columns of the array.
+    r, c = im_fft.shape
+    if randomized_mask[i]:
+      mask = np.ones(im_fft.shape[:2]) > 0
+      im_fft[int(r*keep_fraction[i]):int(r*(1-keep_fraction[i]))] = 0
+      im_fft[:, int(c*keep_fraction[i]):int(c*(1-keep_fraction[i]))] = 0
+      mask = ~mask
+      #Now things to keep = 0, things to remove = 1
+      mask = mask * ~(np.random.uniform(size=im_fft.shape[:2] ) < keep_fraction[i])
+      #Now switch back
+      mask = ~mask
+      im_fft = np.multiply(im_fft, mask)
+    else:
+      im_fft[int(r*keep_fraction[i]):int(r*(1-keep_fraction[i]))] = 0
+      im_fft[:, int(c*keep_fraction[i]):int(c*(1-keep_fraction[i]))] = 0
+      #Now, lets perturb all the rest of the non-zero values by a relative factor
+      im_fft = np.multiply(im_fft, point_factor)
+      im_new = fftpack.ifft2(im_fft).real
+      #FFT inverse may no longer produce exact same range, so clip it back
+      im_new = np.clip(im_new, 0, 1)
+      img[:,:,i] = im_new
   return img
 
 ## Color Space Group Below
@@ -617,10 +615,54 @@ def alterHSV(img):
   img = np.clip(img, 0, 1.0)
   return img
 
+def alterXYZ(img):
+  img = color.rgb2xyz(img)
+  params = []
+  #X
+  img[:,:,0] += randUnifC(-0.05, 0.05, params=params)
+  #Y
+  img[:,:,1] += randUnifC(-0.05, 0.05, params=params)
+  #Z
+  img[:,:,2] += randUnifC(-0.05, 0.05, params=params)
+  img = np.clip(img, 0, 1.0)
+  img = color.xyz2rgb(img)
+  img = np.clip(img, 0, 1.0)
+  return img
+
+def alterLAB(img):
+  img = color.rgb2lab(img)
+  params = []
+  #L
+  img[:,:,0] += randUnifC(-5.0, 5.0, params=params)
+  #a
+  img[:,:,1] += randUnifC(-2.0, 2.0, params=params)
+  #b
+  img[:,:,2] += randUnifC(-2.0, 2.0, params=params)
+  # L 2 [0,100] so clip it; a & b channels can have,! negative values.
+  img[:,:,0] = np.clip(img[:,:,0], 0, 100.0)
+  img = color.lab2rgb(img)
+  img = np.clip(img, 0, 1.0)
+  return img
+
+def alterYUV(img):
+  img = color.rgb2yuv(img)
+  params = []
+  #Y
+  img[:,:,0] += randUnifC(-0.05, 0.05, params=params)
+  #U
+  img[:,:,1] += randUnifC(-0.02, 0.02, params=params)
+  #V
+  img[:,:,2] += randUnifC(-0.02, 0.02, params=params)
+  # U & V channels can have negative values; clip only Y
+  img[:,:,0] = np.clip(img[:,:,0], 0, 1.0)
+  img = color.yuv2rgb(img)
+  img = np.clip(img, 0, 1.0)
+  return img
+
 ## Grey Scale Group Below
 def greyScaleMix(img):
   # average of color channels, different contribution for each channel
-  ratios = np.array([0.70093783,  0.29779764,  0.37861929])
+  ratios = np.random.rand(3)
   ratios /= ratios.sum()
   params = [x for x in ratios]
   img_g = img[:,:,0] * ratios[0] + img[:,:,1] * ratios[1] + img[:,:,2] * ratios[2]
@@ -628,75 +670,116 @@ def greyScaleMix(img):
     img[:,:,i] = img_g
   return img
 
-#from PIL import Image
-# Code for saving image from https://stackoverflow.com/questions/2659312/how-do-i-convert-a-numpy-array-to-and-display-an-image
-# def applyTransforms(img):
-#     # Take in tensor, return tensor
-#   img = np.array(img)
-#   #print("Min:", np.min(img), "Max:", np.max(img))
-#   # id = str(img[0][0])
-#   # savedImage = Image.fromarray(img, 'RGB')
-#   # savedImage.save("sample_data/transform" + str(id) + str(0) + ".png")
-#   allTransforms = [[colorPrecisionReduction], [jpegNoise], [swirl], [fftPerturbation], [alterHSV, alterXYZ, alterLAB, alterYUV], [greyScaleMix, greyScalePartialMix, greyScaleMixTwoThirds, oneChannelPartialGrey], [gaussianBlur, chambolleDenoising, nonlocalMeansDenoising]]
-#   numTransforms = random.randint(0, 5)
-#   img = img / 255.0
+def greyScalePartialMix(img):
+  ratios = np.random.rand(3)
+  ratios/=ratios.sum()
+  prop_ratios = np.random.rand(3)
+  params = [x for x in ratios] + [x for x in prop_ratios]
+  img_g = img[:,:,0] * ratios[0] + img[:,:,1] * ratios[1] + img[:,:,2] * ratios[2]
+  for i in range(3):
+    p = max(prop_ratios[i], 0.2)
+    img[:,:,i] = img[:,:,i]*p + img_g*(1.0-p)
+  return img
 
-#   for i in range(numTransforms):
-#       transformGroup = random.choice(allTransforms)
-#       transform = random.choice(transformGroup)
-#       #transform = alterHSV
+def greyScaleMixTwoThirds(img):
+  params = []
+  # Pick a channel that will be left alone and remove it from the ones to be averaged
+  channels = [0, 1, 2]
+  remove_channel = np.random.choice(3)
+  channels.remove( remove_channel)
+  params.append( remove_channel )
+  ratios = np.random.rand(2)
+  ratios/=ratios.sum()
+  params.append(ratios[0]) #They sum to one, so first item fully specifies the group
+  img_g = img[:,:,channels[0]] * ratios[0] + img[:,:,channels[1]] * ratios[1]
+  for i in channels:
+    img[:,:,i] = img_g
+  return img
 
-#       img = transform(img)
+def oneChannelPartialGrey(img):
+  params = []
+  # Pick a channel that will be altered and remove it from the ones to be averaged
+  channels = [0, 1, 2]
+  to_alter = np.random.choice(3)
+  channels.remove(to_alter)
+  params.append(to_alter)
+  ratios = np.random.rand(2)
+  ratios/=ratios.sum()
+  params.append(ratios[0]) #They sum to one, so first item fully specifies the group
+  img_g = img[:,:,channels[0]] * ratios[0] + img[:,:,channels[1]] * ratios[1]
+  # Lets mix it back in with the original channel
+  p = (0.9-0.1)*np.random.random(1)[0] + 0.1
+  params.append( p )
+  img[:,:,to_alter] = img_g*p + img[:,:,to_alter] *(1.0-p)
+  return img
 
-#       #savedImage = Image.fromarray(img, 'RGB')
-#       #savedImage.save("sample_data/transform" + str(id) + str(i + 1) + str(transform) + ".png")
-#       allTransforms.remove(transformGroup)
+## Denoising Group
+def gaussianBlur(img):
+  if randUnifC(0, 1) > 0.5:
+    sigma = [randUnifC(0.1, 0.8)]*3
+  else:
+    sigma = [randUnifC(0.1, 0.8), randUnifC(0.1, 0.8), randUnifC(0.1, 0.8)]
+    img[:,:,0] = skimage.filters.gaussian(img[:,:,0], sigma=sigma[0])
+    img[:,:,1] = skimage.filters.gaussian(img[:,:,1], sigma=sigma[1])
+    img[:,:,2] = skimage.filters.gaussian(img[:,:,2], sigma=sigma[2])
+  return img
 
-#   img = img * 255.0
-#   img = np.swapaxes(img, 0, 2)
-#   return torch.from_numpy(img).float()
+def chambolleDenoising(img):
+  params = []
+  weight = (0.25-0.05)*np.random.random(1)[0] + 0.05
+  params.append( weight )
+  multi_channel = np.random.choice(2) == 0
+  params.append( multi_channel )
+  img = skimage.restoration.denoise_tv_chambolle( img, weight=weight, multichannel=multi_channel)
+  return img
 
+def nonlocalMeansDenoising(img):
+  h_1 = randUnifC(0, 1)
+  params = [h_1]
+  sigma_est = np.mean(skimage.restoration.estimate_sigma(img,multichannel=True) )
+  h = (1.15-0.6)*sigma_est*h_1 + 0.6*sigma_est
+  #If false, it assumes some weird 3D stuff
+  multi_channel = np.random.choice(2) == 0
+  params.append( multi_channel )
+  #Takes too long to run without fast mode.
+  fast_mode = True
+  patch_size = np.random.random_integers(5, 7)
+  params.append(patch_size)
+  patch_distance = np.random.random_integers(6, 11)
+  params.append(patch_distance)
+  if multi_channel:
+    img = skimage.restoration.denoise_nl_means( img,h=h, patch_size=patch_size,patch_distance=patch_distance,fast_mode=fast_mode )
+  else:
+      for i in range(3):
+          sigma_est = np.mean(skimage.restoration.estimate_sigma(img[:,:,i], multichannel=True ) )
+          h = (1.15-0.6)*sigma_est*params[i] + 0.6*sigma_est
+          img[:,:,i] = skimage.restoration.denoise_nl_means(img[:,:,i], h=h, patch_size=patch_size, patch_distance=patch_distance, fast_mode=fast_mode )
+  return img
 
-
-
-# Below for original, non-working transforms
-# def applyTransforms(img):
-#   # print(type(img))
-#   img = np.array(img)
-#   # print(img.shape)
-#   # print(img)
-#   img = np.swapaxes(img, 0, 2)
-#   allTransforms = [[colorPrecisionReduction], [jpegNoise], [swirl], [fftPerturbation], [alterHSV, alterXYZ, alterLAB, alterYUV], [greyScaleMix, greyScalePartialMix, greyScaleMixTwoThirds, oneChannelPartialGrey], [gaussianBlur, chambolleDenoising, nonlocalMeansDenoising]]
-#   numTransforms = random.randint(0, 5)
-
-#   #print("Original.")
-#   #img = img / 255.0
-
-#   #for i in range(numTransforms):
-#   for i in range(numTransforms):
-#       transformGroup = random.choice(allTransforms)
-#       transform = random.choice(transformGroup)
-#       #transform = alterHSV
-
-#       img = transform(img)
-
-#       #savedImage = Image.fromarray(img, 'RGB')
-#       #savedImage.save("sample_data/transform" + str(id) + str(i + 1) + str(transform) + ".png")
-#       allTransforms.remove(transformGroup)
-
-#   return torch.from_numpy(np.swapaxes(img, 0, 2)).float()
-
-
-# Below for having applyTransforms in data-loading with RandomApply
-from PIL import Image
 def applyTransforms(img):
   img = np.array(img)
-  allTransforms = [colorPrecisionReduction, jpegNoise, swirl, alterHSV, greyScaleMix]
+  allTransforms = [[colorPrecisionReduction], [jpegNoise], [swirl], [fftPerturbation], [alterHSV, alterXYZ, alterLAB, alterYUV], [greyScaleMix, greyScalePartialMix, greyScaleMixTwoThirds, oneChannelPartialGrey], [gaussianBlur, chambolleDenoising, nonlocalMeansDenoising]]
+  numTransforms = random.randint(0, 5)
 
+  id = str(img[0][0])
+  # savedImage = Image.fromarray(np.uint8(img), 'RGB')
+  # savedImage.save("sample_data/transform" + str(id) + str(0) + ".png")
+
+  #print("Original.")
   img = img / 255.0
 
-  for transform in allTransforms:
+  #for i in range(numTransforms):
+  for i in range(numTransforms):
+      transformGroup = random.choice(allTransforms)
+      transform = random.choice(transformGroup)
+      #transform = alterHSV
+      # print(img)
+
       img = transform(img)
+
+      # savedImage = Image.fromarray(np.uint8(img * 255.0), 'RGB')
+      # savedImage.save("sample_data/transform" + str(id) + str(i + 1) + str(transform) + ".png")
+      allTransforms.remove(transformGroup)
 
   return torch.from_numpy(np.swapaxes(img, 0, 2)).float()
 
