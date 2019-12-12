@@ -18,8 +18,6 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 def norm_to_pil_image(img):
-    # Next three lines reverse normalization
-    #img_new = torch.Tensor(img)
     img_new = reverse_normalization(img.clone().detach().cpu())
     img_new.mul_(255)
     np_img = np.rollaxis(np.uint8(img_new.numpy()), 0, 3)
@@ -88,24 +86,23 @@ class BaseEvaluator():
 
         from PIL import Image
 
-        # for batch_idx, (data, target) in enumerate(self.val_loader[0]):
-        #     if self.cuda:
-        #         data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
-        #     with torch.no_grad():
-        #         #output = self.model(data)
-        #         std_cpy = data.clone().detach()
-        #         output = self.model(std_cpy)
-        #         std_logits.update(output.cpu())
-        #         loss = F.cross_entropy(output, target, reduction='none').cpu()
-        #         std_loss.update(loss)
-        #         corr = correct(output, target)
-        #         corr = corr.view(corr.size()[0]).cpu()
-        #         std_corr.update(corr)
+        for batch_idx, (data, target) in enumerate(self.val_loader[0]):
+            if self.cuda:
+                data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
+            with torch.no_grad():
+                std_cpy = data.clone().detach()
+                output = self.model(std_cpy)
+                std_logits.update(output.cpu())
+                loss = F.cross_entropy(output, target, reduction='none').cpu()
+                std_loss.update(loss)
+                corr = correct(output, target)
+                corr = corr.view(corr.size()[0]).cpu()
+                std_corr.update(corr)
         
-        #     run_output = {'std_loss':std_loss.avg,
-        #                   'std_acc':std_corr.avg}
-        #     print('Standard Batch', batch_idx)
-        #     print(run_output)
+            run_output = {'std_loss':std_loss.avg,
+                          'std_acc':std_corr.avg}
+            print('Standard Batch', batch_idx)
+            print(run_output)
 
         for batch_idx, (data, target) in enumerate(self.val_loader[1]):
 
@@ -122,10 +119,6 @@ class BaseEvaluator():
             from PIL import Image
             data_adv = self.attack(self.model, data, rand_target,
                                    avoid_target=False, scale_eps=False)
-
-            # for idx in range(len(data)):
-            #     savedImage = norm_to_pil_image(data_adv[idx])
-            #     savedImage.save("sample_data/eric" + str(idx) + '.png')
 
             with torch.no_grad():
                 output_adv = self.model(data_adv)
@@ -191,28 +184,6 @@ class CIFAR10CEvaluator(BaseEvaluator):
                 sampler=self.val_sampler, num_workers=1, pin_memory=True,
                 shuffle=False)]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import click
 import importlib
 import os
@@ -269,7 +240,7 @@ class LambdaLayer(nn.Module):
     def forward(self, x):
         return self.lambd(x)
 
-# This ResNet50 archiecture was obtained from https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
+# This ResNet50 architecture was obtained from https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -401,8 +372,6 @@ def run(**flag_kwargs):
         FLAGS.step_size = get_step_size(FLAGS.epsilon, FLAGS.n_iters, FLAGS.use_max_step)
         FLAGS._dict['step_size'] = FLAGS.step_size
     FLAGS.summary()
-
-    #logger = init_logger(FLAGS.use_wandb, 'eval', FLAGS._dict)
 
     if FLAGS.dataset in ['cifar-10', 'cifar-10-c']:
         nb_classes = 10
